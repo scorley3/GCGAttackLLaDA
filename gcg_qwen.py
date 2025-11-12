@@ -1,5 +1,9 @@
+from transformers import AutoModel, AutoTokenizer
+import torch.nn.functional as F
+import torch
 def qwen_gcg_single_attack(model, x, target, I, T, k, B):
   model.eval()
+  tokenizer = AutoTokenizer.from_pretrained(model)
   device = model.device
   # run T iterations of token substitution
   for t in range(T):
@@ -76,11 +80,10 @@ def qwen_gcg_single_attack(model, x, target, I, T, k, B):
 
       # compute output of model for adversarial prompt
       adv_output = model.generate(input_ids=x_iter[b].unsqueeze(0).to(device), max_new_tokens=512)
+
       adv_text = tokenizer.decode(adv_output[0], skip_special_tokens=True)
-      adv_ids = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+      adv_ids = tokenizer(adv_text, return_tensors="pt")["input_ids"].to(device)
       # retrieve token IDs for adversarial output
-      #adv_ids = tokenizer.batch_decode(adv_output[:, x_iter[b].unsqueeze(0).shape[1]:], skip_special_tokens=True)[0]
-      adv_ids = tokenizer(adv_ids, return_tensors="pt")["input_ids"].to(device)
 
       adv_logits = model(input_ids=adv_ids).logits
       adv_logits = adv_logits.view(-1, adv_logits.size(-1))

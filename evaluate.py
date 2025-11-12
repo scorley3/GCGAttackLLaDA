@@ -1,16 +1,29 @@
+import torch
+from LLaDA_main import generate
+from LLaDA_main import get_log_likelihood
+from transformers import AutoTokenizer
+from gcg_qwen import qwen_gcg_single_attack
+from gcg_single import gcg_single_attack_loss
+
+def get_modifiable(prompt):
+  return prompt
+
 # Evaluate efficacy of attack on model
 def evaluate(model, prompts, targets, iters, k, batch_size):
   total = len(prompts)
   successful = 0
+  device = model.device
   for i in range(len(prompts)):
     print(f"Running GCG Attack for Prompt: {prompts[i]}")
     modifiable_subset = get_modifiable(prompts[i])
     optimized_prompt = None
     # attack prompt
-    if (model_qwen.config.model_type == "qwen2"):
+    if (model.config.model_type == "qwen2"):
       optimized_prompt = qwen_gcg_single_attack(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
+      tokenizer = AutoTokenizer.from_pretrained(model)
     else:
       optimized_prompt = gcg_single_attack_loss(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
+      tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
     print("OPTIMIZED PROMPT", optimized_prompt)
 
     # retrieve IDs for optimized prompt
@@ -31,15 +44,23 @@ def evaluate(model, prompts, targets, iters, k, batch_size):
   print(f"Attack success rate: {success_rate}%")
   return success_rate
 
+
+
 # evaluation function to use for messing with parameters
 def evaluate_experimental(model, prompts, targets, iters, loss, k, batch_size):
   total = len(prompts)
   successful = 0
+  device = model.device
   for i in range(len(prompts)):
     print(f"Running GCG Attack for Prompt: {prompts[i]}")
     modifiable_subset = get_modifiable(prompts[i])
     optimized_prompt = prompts[i]
-    optimized_prompt = gcg_single_attack_loss(model, optimized_prompt, targets[i], optimized_prompt, iters, loss, k, batch_size)
+    if (model.config.model_type == "qwen2"):
+      optimized_prompt = qwen_gcg_single_attack(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
+      tokenizer = AutoTokenizer.from_pretrained(model)
+    else:
+      optimized_prompt = gcg_single_attack_loss(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
+      tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
     print("OPTIMIZED PROMPT", optimized_prompt)
     input_ids = tokenizer(optimized_prompt)['input_ids']
     input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)

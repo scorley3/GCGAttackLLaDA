@@ -1,6 +1,14 @@
+from transformers import AutoModel, AutoTokenizer
+from LLaDA_main import generate
+from LLaDA_main import get_log_likelihood
+import torch.nn.functional as F
+import torch
+from project import model_qwen, qwen_tokenizer, device 
 def gcg_single_attack_loss(model, x, target, I, T, k, B):
   model.eval()
-
+  tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
+  device = model.device
+  mask_id = 126336
   # run T iterations of token substitution
   for t in range(T):
     # get vocab embeddings from the model
