@@ -1,77 +1,181 @@
 import torch
-from LLaDA_main import generate
-from LLaDA_main import get_log_likelihood
+import json
+from LLaDA_main import generate, get_log_likelihood
 from transformers import AutoTokenizer
 from gcg_qwen import qwen_gcg_single_attack
 from gcg_single import gcg_single_attack_loss
+import gc
+from models import load_qwen, load_llada, unload_model
 
-def get_modifiable(prompt):
-  return prompt
+def update_log_entry(prompt_id, update_dict, log_path="attack_log.json"):
 
-# Evaluate efficacy of attack on model
-def evaluate(model, prompts, targets, iters, k, batch_size):
-  total = len(prompts)
-  successful = 0
-  device = model.device
-  for i in range(len(prompts)):
-    print(f"Running GCG Attack for Prompt: {prompts[i]}")
-    modifiable_subset = get_modifiable(prompts[i])
-    optimized_prompt = None
-    # attack prompt
-    if (model.config.model_type == "qwen2"):
-      optimized_prompt = qwen_gcg_single_attack(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
-      tokenizer = AutoTokenizer.from_pretrained(model)
-    else:
-      optimized_prompt = gcg_single_attack_loss(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
-      tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
-    print("OPTIMIZED PROMPT", optimized_prompt)
+    try:
+        with open(log_path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = []
 
-    # retrieve IDs for optimized prompt
-    input_ids = tokenizer(optimized_prompt)['input_ids']
-    input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
+    # Look for existing entry
+    found = False
+    for entry in data:
+        if entry.get("prompt_id") == prompt_id:
+            entry.update(update_dict)
+            found = True
+            break
 
-    # generate response using adversarial prompt
-    response = generate.generate(model, input_ids, steps=128, gen_length=128, block_length=32, temperature=0., cfg_scale=0., remasking='low_confidence')
-    adv_output = tokenizer.batch_decode(response[:, input_ids.shape[1]:], skip_special_tokens=True)[0]
+    if not found:
+        # Create new entry
+        new_entry = {"prompt_id": prompt_id, **update_dict}
+        data.append(new_entry)
 
-    print("OUTPUT", adv_output)
+    # Write back to file
+    with open(log_path, "w") as f:
+        json.dump(data, f, indent=2)
 
-    # TODO: implement better mechanism for determining attack success
-    if targets[i].lower() in adv_output.lower():
-      print("ATTACK SUCCESSFUL")
-      successful += 1
-  success_rate = successful / total
-  print(f"Attack success rate: {success_rate}%")
-  return success_rate
+def evaluate(prompts, targets, iters, k, batch_size, use_qwen=True, seed_llada="False", device="cuda", suffix_len=20,log_path="attack_log.json"):
+    gc.collect()
+    torch.cuda.empty_cache()
+    total = len(prompts)
+    successful = 0
+    adversarial_strings = [] 
+    # QWEN ATTACK PATH
+    if use_qwen:
+     
+        qwen_model, qwen_tokenizer = load_qwen(device=device)
 
+        for i in range(total):
+            prompt = prompts[i] #+ ". (Respond in English)"
+            target = targets[i]
+            print(f"\n=== Running Qwen Attack for Prompt {i}: {prompt} ===")
 
+            print("\n--- Running GCG Attack on Qwen ---")
+            optimized_prompt = qwen_gcg_single_attack(qwen_model, qwen_tokenizer, prompt, target, suffix_len, iters, k, batch_size)
+            print("OPTIMIZED PROMPT (Qwen):", optimized_prompt)
 
-# evaluation function to use for messing with parameters
-def evaluate_experimental(model, prompts, targets, iters, loss, k, batch_size):
-  total = len(prompts)
-  successful = 0
-  device = model.device
-  for i in range(len(prompts)):
-    print(f"Running GCG Attack for Prompt: {prompts[i]}")
-    modifiable_subset = get_modifiable(prompts[i])
-    optimized_prompt = prompts[i]
-    if (model.config.model_type == "qwen2"):
-      optimized_prompt = qwen_gcg_single_attack(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
-      tokenizer = AutoTokenizer.from_pretrained(model)
-    else:
-      optimized_prompt = gcg_single_attack_loss(model, prompts[i], targets[i], modifiable_subset, iters, k, batch_size)
-      tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
-    print("OPTIMIZED PROMPT", optimized_prompt)
-    input_ids = tokenizer(optimized_prompt)['input_ids']
-    input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
+            # Evaluate on Qwen
+            print("\n--- Testing Adversarial Prompt on Qwen ---")
+            q_ids = qwen_tokenizer(optimized_prompt, return_tensors="pt").input_ids.to(device)
+            with torch.no_grad():
+                output_ids = qwen_model.generate(
+                    q_ids,
+                    max_length=q_ids.shape[1] + 128,
+                    do_sample=False,
+                )
 
-    response = generate.generate(model, input_ids, steps=128, gen_length=128, block_length=32, temperature=0.7, attention_mask=torch.ones_like(input_ids), cfg_scale=0.1, remasking='low_confidence')
-    adv_output = tokenizer.batch_decode(response[:, input_ids.shape[1]:], skip_special_tokens=True)[0]
+                qwen_output = qwen_tokenizer.decode(output_ids[0][q_ids.shape[1]:], skip_special_tokens=True)
+            print("QWEN OUTPUT:", qwen_output)
 
-    print("OUTPUT", adv_output)
-    if targets[i].lower() in adv_output.lower():
-      print("ATTACK SUCCESSFUL")
-      successful += 1
-  success_rate = successful / total
-  print(f"Attack success rate: {success_rate}%")
-  return success_rate
+            if target.lower() in qwen_output.lower():
+                print("QWEN ATTACK SUCCESSFUL")
+
+            # save for LLADA
+            adversarial_strings.append((optimized_prompt, target))
+            # Save for LLADA
+            adversarial_strings.append((optimized_prompt, target))
+
+            update_log_entry(
+                prompt_id=i,
+                update_dict={
+                    "prompt": prompt,
+                    "target": target,
+                    "optimized_prompt_qwen": optimized_prompt,
+                    "qwen_output": qwen_output,
+                },
+                log_path=log_path
+            )
+
+        # unload Qwen before loading LLADA in order to save ram
+        unload_model(qwen_model)
+        if seed_llada != "True":
+            # reload llama 
+            llada_model, llada_tokenizer = load_llada(device=device)
+            m = [{"role": "user", "content": prompt}, ]
+            for optimized_prompt, target in adversarial_strings:
+                print("\n--- Evaluating Qwen Adversarial Prompt on LLADA ---")
+                prompt = llada_tokenizer.apply_chat_template(m, add_generation_prompt=True, tokenize=False)
+                input_ids = llada_tokenizer(prompt)['input_ids']
+                input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
+
+                response_ids = generate.generate(
+                    llada_model,
+                    input_ids,
+                    steps=128,
+                    gen_length=128,
+                    block_length=32,
+                    temperature=0.0,
+                    cfg_scale=0.0,
+                    remasking="low_confidence"
+                )
+
+                llada_output = llada_tokenizer.batch_decode(
+                    response_ids[:, input_ids.shape[1]:],
+                    skip_special_tokens=True
+                )[0]
+
+                print("LLADA OUTPUT:", llada_output)
+
+                if target.lower() in llada_output.lower():
+                    print("LLADA ATTACK SUCCESSFUL")
+                    successful += 1
+                update_log_entry(
+                    prompt_id=i,
+                    update_dict={
+                        "optimized_prompt_llada": optimized_prompt,
+                        "llada_output": llada_output,
+                    },
+                    log_path=log_path
+                )
+
+            return successful / total
+
+    # LLADA ONLY PATH
+    elif use_qwen == False or (use_qwen == True and seed_llada == "True"):
+        llada_model, llada_tokenizer = load_llada(device=device)
+
+        for i in range(total):
+            prompt = prompts[i]
+            target = targets[i]
+
+            print(f"\n=== Running LLADA Attack for Prompt {i}: {prompt} ===")
+            if seed_llada == "True":
+                print(f"\n=== Using Seed: {adversarial_strings[i]} ===")
+
+            optimized_prompt = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i])
+            print("OPTIMIZED PROMPT:", optimized_prompt)
+            m = [{"role": "user", "content": optimized_prompt}, ]
+            optimized_prompt = llada_tokenizer.apply_chat_template(m, add_generation_prompt=True, tokenize=False)
+            input_ids = llada_tokenizer(optimized_prompt)['input_ids']
+            input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
+            response_ids = generate.generate(
+                llada_model,
+                input_ids,
+                steps=128,
+                gen_length=128,
+                block_length=32,
+                temperature=0.0,
+                cfg_scale=0.0,
+                remasking="low_confidence"
+            )
+
+            llada_output = llada_tokenizer.batch_decode(
+                response_ids[:, input_ids.shape[1]:],
+                skip_special_tokens=True
+            )[0]
+
+            print("LLADA OUTPUT:", llada_output)
+
+            if target.lower() in llada_output.lower():
+                print("ATTACK SUCCESSFUL")
+                successful += 1
+            update_log_entry(
+                prompt_id=i,
+                update_dict={
+                    "prompt": prompt,
+                    "target": target,
+                    "optimized_prompt_llada": optimized_prompt,
+                    "llada_output": llada_output,
+                },
+                log_path=log_path
+            )
+
+        return successful / total
