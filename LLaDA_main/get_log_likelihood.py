@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 from transformers import AutoTokenizer, AutoModel
 
 
@@ -63,7 +63,10 @@ def get_log_likelihood(model, prompt, answer, mc_num=128, batch_size=16, cfg_sca
     prompt_index = torch.arange(seq.shape[1], device=model.device) < len(prompt)
 
     loss_ = []
-    for _ in range(mc_num // batch_size):
+
+    checkpoints = {15, 32, 48, 64, 80, 96, 112, 128}
+    checkpoint_losses = {}
+    for iteration in range(mc_num // batch_size):
         perturbed_seq, p_mask = forward_process(seq, prompt_index, mask_id)
         mask_index = perturbed_seq == mask_id
 
@@ -73,6 +76,22 @@ def get_log_likelihood(model, prompt, answer, mc_num=128, batch_size=16, cfg_sca
         loss = loss.sum() / batch_size
 
         loss_.append(loss.item())
+        mc_position = iteration * batch_size
+        if mc_position in checkpoints:
+            running_avg = sum(loss_) / len(loss_)
+            checkpoint_losses[mc_position] = running_avg
+    prompt_preview = " ".join(map(str, prompt.tolist()))[:40] + "..."
+
+    xs = list(checkpoint_losses.keys())
+    ys = list(checkpoint_losses.values())
+
+    plt.figure()
+    plt.plot(xs, ys)
+    plt.xlabel("Monte Carlo Iterations")
+    plt.ylabel("Loss")
+    plt.title(f"Loss vs Iterations ({prompt_preview})")
+    plt.grid(True)
+    plt.show()
 
     return - sum(loss_) / len(loss_)
 
