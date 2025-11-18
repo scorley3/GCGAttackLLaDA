@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("--prompts_end", type=int, default=20, help="End index for dataset prompts")
     parser.add_argument("--iterations", type=int, default=5, help="Number of attack iterations")
     parser.add_argument("--k", type=int, default=256, help="Top-k tokens considered for substitution")
-    parser.add_argument("--batch_size", type=int, default=128, help="Batch size for random substitutions")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for random substitutions")
     parser.add_argument("--use_qwen", type=bool, default=False, help="Whether to attack Qwen model first")
     parser.add_argument("--suffix_len", type=int, default=20, help="Length of suffix to optimize")
     parser.add_argument("--seed_llada", type=bool, default=True, help="Whether to seed LLADA with Qwen adversarial prompt")

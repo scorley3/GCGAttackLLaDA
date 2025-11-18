@@ -14,6 +14,8 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, see
   target_ids = tokenizer(target, return_tensors="pt")["input_ids"].to(device)
   prefix_len = prefix_ids.shape[1]
   if seed != "None":
+    seed = seed[len(x):]
+    print("This is the seed without the beginning: ", seed)
     suffix_tokens = tokenizer(seed, return_tensors="pt")["input_ids"].to(device)
   #randomly seed suffix
   else:
