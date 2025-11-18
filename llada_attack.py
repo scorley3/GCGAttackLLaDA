@@ -18,12 +18,12 @@ def main(prompts_start=0, prompts_end=50, iterations=40, k=256, batch_size=128,u
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Run GCG adversarial attacks on Qwen and/or LLADA models."
+        description="Run GCG adversarial attacks on LLADA model."
     )
 
     parser.add_argument("--prompts_start", type=int, default=0, help="Start index for dataset prompts")
     parser.add_argument("--prompts_end", type=int, default=20, help="End index for dataset prompts")
-    parser.add_argument("--iterations", type=int, default=40, help="Number of attack iterations")
+    parser.add_argument("--iterations", type=int, default=5, help="Number of attack iterations")
     parser.add_argument("--k", type=int, default=256, help="Top-k tokens considered for substitution")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size for random substitutions")
     parser.add_argument("--use_qwen", type=bool, default=False, help="Whether to attack Qwen model first")

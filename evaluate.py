@@ -35,7 +35,7 @@ def update_log_entry(prompt_id, update_dict, log_path="attack_log_llada.json"):
     with open(log_path, "w") as f:
         json.dump(data, f, indent=2)
 
-def evaluate(prompts, targets, iters, k, batch_size, use_qwen=True, seed_llada="False", device="cuda", suffix_len=20,log_path="attack_log.json"):
+def evaluate(prompts, targets, iters, k, batch_size, use_qwen=True, seed_llada="False", device="cuda", suffix_len=20,log_path="attack_log_llada.json"):
     gc.collect()
     torch.cuda.empty_cache()
     total = len(prompts)
