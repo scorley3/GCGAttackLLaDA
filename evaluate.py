@@ -6,8 +6,11 @@ from gcg_qwen import qwen_gcg_single_attack
 from gcg_single import gcg_single_attack_loss
 import gc
 from models import load_qwen, load_llada, unload_model
+import json
+from pathlib import Path
+from typing import List, Any
 
-def update_log_entry(prompt_id, update_dict, log_path="attack_log.json"):
+def update_log_entry(prompt_id, update_dict, log_path="attack_log_llada.json"):
 
     try:
         with open(log_path, "r") as f:
@@ -38,6 +41,20 @@ def evaluate(prompts, targets, iters, k, batch_size, use_qwen=True, seed_llada="
     total = len(prompts)
     successful = 0
     adversarial_strings = [] 
+    path = "attack_log.json"
+    text = Path(path).read_text(encoding="utf-8")
+    data = json.loads(text)
+
+    # If file contains a single object, make it a list of one object
+    if isinstance(data, dict):
+        data = [data]
+
+    for obj in data:
+        # safe-get the field; skip objects without it
+        val: Any = obj.get("optimized_prompt_qwen")
+        if isinstance(val, str):
+            adversarial_strings.append(val)
+    print(adversarial_strings)
     # QWEN ATTACK PATH
     if use_qwen:
      
