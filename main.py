@@ -4,7 +4,7 @@ from evaluate import evaluate
 from data import get_dataset
 import argparse
 
-def main(prompts_start=0, prompts_end=50, iterations=40, k=256, batch_size=128,use_qwen=True, suffix_len=20, seed_llada=True): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
+def main(prompts_start=0, prompts_end=50, iterations=40, k=256, batch_size=128,use_qwen=True, suffix_len=20, seed_llada=True, prefill_string=None): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
     mask_id = 126336
     gc.collect()
     torch.cuda.empty_cache()
@@ -22,10 +22,11 @@ if __name__ == "__main__":
     parser.add_argument("--iterations", type=int, default=40, help="Number of attack iterations")
     parser.add_argument("--k", type=int, default=256, help="Top-k tokens considered for substitution")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size for random substitutions")
-    parser.add_argument("--use_qwen", type=bool, default=True, help="Whether to attack Qwen model first")
+    parser.add_argument("--use_qwen", type=bool, default=False, help="Whether to attack Qwen model first")
     parser.add_argument("--suffix_len", type=int, default=20, help="Length of suffix to optimize")
-    parser.add_argument("--seed_llada", type=bool, default=True, help="Whether to seed LLADA with Qwen adversarial prompt")
-
+    parser.add_argument("--seed_llada", type=bool, default=False, help="Whether to seed LLADA with Qwen adversarial prompt")
+    parser.add_argument("--prefill_string", type=bool, default=False, help="String to prefill in LLADA prompts")
+    parser.add_argument("--log_path", type=str, default="attack_log.json", help="Path to log attack results")
     args = parser.parse_args()
     
     main(
@@ -36,5 +37,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         use_qwen=args.use_qwen,
         suffix_len=args.suffix_len,
-        seed_llada=args.seed_llada
+        seed_llada=args.seed_llada,
+        prefill_string=args.prefill_string,
+        log_path=args.log_path
     )

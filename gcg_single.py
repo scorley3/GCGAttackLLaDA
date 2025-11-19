@@ -6,13 +6,15 @@ import torch
 import gc
 
 
-def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, seed="None"):
+
+def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_num=80, seed="None"):
   model.eval()
   device = model.device
   embeddings = model.model.transformer.wte
   prefix_ids = tokenizer(x, return_tensors="pt")["input_ids"].to(device)
   target_ids = tokenizer(target, return_tensors="pt")["input_ids"].to(device)
   prefix_len = prefix_ids.shape[1]
+  loss_vals = []
   if seed != "None":
     suffix_tokens = tokenizer(seed, return_tensors="pt")["input_ids"].to(device)
   #randomly seed suffix
@@ -73,8 +75,8 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, see
       temp[i] = token_idx
       candidates[b] = temp
       with torch.no_grad():
-        losses[b] = -1 * get_log_likelihood.get_log_likelihood(model, candidates[b], target_ids.squeeze(0), mc_num=128, batch_size=16, cfg_scale=0., mask_id=126336)
-      
+        losses[b] = -1 * get_log_likelihood.get_log_likelihood(model, candidates[b], target_ids.squeeze(0), mc_num=mc_num, batch_size=16, cfg_scale=0., mask_id=126336)
+    loss_vals.append(torch.min(losses))
     x_ids = candidates[torch.argmin(losses)]
     suffix_tokens = x_ids[prefix_len:].unsqueeze(0)
     # retrieve token
@@ -84,4 +86,4 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, see
 
     # return adversarial prompt with minimum loss
   final_ids = torch.cat([prefix_ids, suffix_tokens], dim=1)
-  return tokenizer.decode(final_ids[0], skip_special_tokens=True)
+  return tokenizer.decode(final_ids[0], skip_special_tokens=True), loss_vals
