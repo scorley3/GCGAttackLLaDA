@@ -4,12 +4,11 @@ from evaluate import evaluate
 from data import get_dataset
 import argparse
 
-def main(prompts_start=0, prompts_end=50, iterations=40, k=256, batch_size=128,use_qwen=True, suffix_len=20, seed_llada=True, prefill_string=None): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
-    mask_id = 126336
+def main(prompts_start=0, prompts_end=50, iterations=40, k=256, batch_size=128,use_qwen=True, suffix_len=20, seed_llada=True, prefill_string=True, log_path="attack_log.json", plot_path ="Loss_plot_prompt" ): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
     gc.collect()
     torch.cuda.empty_cache()
     prompts, targets = get_dataset()
-    evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len)
+    evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len, log_path=log_path, prefill_string=prefill_string, plot_path=plot_path)
 
 
 if __name__ == "__main__":
@@ -27,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed_llada", type=bool, default=False, help="Whether to seed LLADA with Qwen adversarial prompt")
     parser.add_argument("--prefill_string", type=bool, default=False, help="String to prefill in LLADA prompts")
     parser.add_argument("--log_path", type=str, default="attack_log.json", help="Path to log attack results")
+    parser.add_argument("--plot_path", type=str, default="Loss_plot_prompt", help="Path to plot results")
     args = parser.parse_args()
     
     main(
@@ -39,5 +39,6 @@ if __name__ == "__main__":
         suffix_len=args.suffix_len,
         seed_llada=args.seed_llada,
         prefill_string=args.prefill_string,
-        log_path=args.log_path
+        log_path=args.log_path,
+        plot_path=args.plot_path
     )

@@ -33,7 +33,7 @@ def update_log_entry(prompt_id, update_dict, log_path="attack_log.json", plot_pa
     with open(log_path, "w") as f:
         json.dump(data, f, indent=2)
 
-def evaluate(prompts, targets, iters, k, batch_size, use_qwen=True, seed_llada="False", device="cuda", suffix_len=20,log_path="attack_log.json", prefill_string=True):
+def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen=True, seed_llada="False", device="cuda", suffix_len=20,log_path="attack_log.json", prefill_string=True):
     gc.collect()
     torch.cuda.empty_cache()
     total = len(prompts)
@@ -143,7 +143,7 @@ def evaluate(prompts, targets, iters, k, batch_size, use_qwen=True, seed_llada="
 
             optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i])
             
-            save_loss_plot(loss_vals, f"Loss_plot_prompt{i}.png")
+            save_loss_plot(loss_vals, f"{plot_path}{i}.png")
             
             print("OPTIMIZED PROMPT:", optimized_prompt)
             for attempt in range(5):
@@ -179,7 +179,7 @@ def save_loss_plot(loss_vals, plot_path):
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
     plt.title('Loss over GCG Iterations')
-    plt.savefig(f"Loss_plot_prompt{i}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
 
 def llada_generate(optimized_prompt, llada_model, llada_tokenizer, device="cuda"):
     m = [{"role": "user", "content": optimized_prompt}, ]
