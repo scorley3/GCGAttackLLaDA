@@ -3,13 +3,23 @@ import torch.nn.functional as F
 from evaluate import evaluate
 from data import get_dataset
 import argparse
-
-def main(prompts_start=0, prompts_end=50, iterations=40, k=256, batch_size=128,use_qwen=True, suffix_len=20, seed_llada=True, prefill_string=True, log_path="attack_log.json", plot_path ="Loss_plot_prompt" ): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
+#prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string
+def main(prompts_start, prompts_end, iterations, k, batch_size,use_qwen, suffix_len, seed_llada, prefill_string, log_path, plot_path): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
     gc.collect()
     torch.cuda.empty_cache()
     prompts, targets = get_dataset()
     evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len, log_path=log_path, prefill_string=prefill_string, plot_path=plot_path)
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes','true','t','1'):
+        return True
+    elif v.lower() in ('no','false','f','0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -21,10 +31,10 @@ if __name__ == "__main__":
     parser.add_argument("--iterations", type=int, default=40, help="Number of attack iterations")
     parser.add_argument("--k", type=int, default=256, help="Top-k tokens considered for substitution")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size for random substitutions")
-    parser.add_argument("--use_qwen", type=bool, default=False, help="Whether to attack Qwen model first")
+    parser.add_argument("--use_qwen", type=str2bool, default=False, help="Whether to attack Qwen model first")
     parser.add_argument("--suffix_len", type=int, default=20, help="Length of suffix to optimize")
-    parser.add_argument("--seed_llada", type=bool, default=False, help="Whether to seed LLADA with Qwen adversarial prompt")
-    parser.add_argument("--prefill_string", type=bool, default=False, help="String to prefill in LLADA prompts")
+    parser.add_argument("--seed_llada", type=str2bool, default=False, help="Whether to seed LLADA with Qwen adversarial prompt")
+    parser.add_argument("--prefill_string", type=str2bool, default=False, help="String to prefill in LLADA prompts")
     parser.add_argument("--log_path", type=str, default="attack_log.json", help="Path to log attack results")
     parser.add_argument("--plot_path", type=str, default="Loss_plot_prompt", help="Path to plot results")
     args = parser.parse_args()

@@ -33,15 +33,14 @@ def update_log_entry(prompt_id, update_dict, log_path="attack_log.json", plot_pa
     with open(log_path, "w") as f:
         json.dump(data, f, indent=2)
 
-def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen=True, seed_llada="False", device="cuda", suffix_len=20,log_path="attack_log.json", prefill_string=True):
+def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string):
     gc.collect()
     torch.cuda.empty_cache()
     total = len(prompts)
     successful = 0
     adversarial_strings = [] 
     # QWEN ATTACK PATH
-    if use_qwen:
-     
+    if use_qwen == True:
         qwen_model, qwen_tokenizer = load_qwen(device=device)
 
         for i in range(total):
@@ -130,7 +129,7 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen=True, s
             return successful / total
 
     # LLADA ONLY PATH
-    elif use_qwen == False or (use_qwen == True and seed_llada == "True"):
+    elif use_qwen == False or (use_qwen == True and seed_llada == True):
         llada_model, llada_tokenizer = load_llada(device=device)
 
         for i in range(total):
@@ -140,8 +139,10 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen=True, s
             print(f"\n=== Running LLADA Attack for Prompt {i}: {prompt} ===")
             if seed_llada == "True":
                 print(f"\n=== Using Seed: {adversarial_strings[i]} ===")
-
-            optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i])
+            if (seed_llada == "True"):
+                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i])
+            else:
+                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size)
             
             save_loss_plot(loss_vals, f"{plot_path}{i}.png")
             

@@ -86,4 +86,4 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_
 
     # return adversarial prompt with minimum loss
   final_ids = torch.cat([prefix_ids, suffix_tokens], dim=1)
-  return tokenizer.decode(final_ids[0], skip_special_tokens=True), loss_vals
+  return tokenizer.decode(final_ids[0], skip_special_tokens=True), [l.cpu().item() for l in loss_vals]
