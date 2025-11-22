@@ -4,11 +4,11 @@ from evaluate import evaluate
 from data import get_dataset
 import argparse
 #prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string
-def main(prompts_start, prompts_end, iterations, k, batch_size,use_qwen, suffix_len, seed_llada, prefill_string, log_path, plot_path): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
+def main(prompts_start, prompts_end, iterations, k, batch_size,use_qwen, suffix_len, seed_llada, prefill_string, log_path, plot_path, mc_num): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
     gc.collect()
     torch.cuda.empty_cache()
     prompts, targets = get_dataset()
-    evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len, log_path=log_path, prefill_string=prefill_string, plot_path=plot_path)
+    evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len, log_path=log_path, prefill_string=prefill_string, plot_path=plot_path, mc_num=mc_num)
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("--prefill_string", type=str2bool, default=False, help="String to prefill in LLADA prompts")
     parser.add_argument("--log_path", type=str, default="attack_log.json", help="Path to log attack results")
     parser.add_argument("--plot_path", type=str, default="Loss_plot_prompt", help="Path to plot results")
+    parser.add_argument("--mc_num", type=int, default=80, help="Number of Monte Carlo samples for LLADA evaluation")
     args = parser.parse_args()
     
     main(
@@ -50,5 +51,6 @@ if __name__ == "__main__":
         seed_llada=args.seed_llada,
         prefill_string=args.prefill_string,
         log_path=args.log_path,
-        plot_path=args.plot_path
+        plot_path=args.plot_path,
+        mc_num=args.mc_num
     )

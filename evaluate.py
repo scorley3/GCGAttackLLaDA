@@ -33,7 +33,7 @@ def update_log_entry(prompt_id, update_dict, log_path="attack_log.json", plot_pa
     with open(log_path, "w") as f:
         json.dump(data, f, indent=2)
 
-def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string):
+def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string, mc_num=64):
     gc.collect()
     torch.cuda.empty_cache()
     total = len(prompts)
@@ -140,9 +140,9 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
             if seed_llada == "True":
                 print(f"\n=== Using Seed: {adversarial_strings[i]} ===")
             if (seed_llada == "True"):
-                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i])
+                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i], mc_num=mc_num)
             else:
-                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size)
+                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, mc_num=mc_num)
             
             save_loss_plot(loss_vals, f"{plot_path}{i}.png")
             

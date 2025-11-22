@@ -7,7 +7,7 @@ import gc
 
 
 
-def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_num=80, seed="None"):
+def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_num, seed="None"):
   model.eval()
   device = model.device
   embeddings = model.model.transformer.wte
