@@ -33,6 +33,20 @@ def get_llada_model():
 
     return tokenizer, model
 
+def load_llada_base(device="cuda"):
+    print("\n[Loading LLADA Base model...]")
+    tokenizer = AutoTokenizer.from_pretrained(
+        "GSAI-ML/LLaDA-8B",
+        trust_remote_code=True
+    )
+    model = AutoModel.from_pretrained(
+        "GSAI-ML/LLaDA-8B",
+        dtype="float16",
+        device_map=device,
+        trust_remote_code=True
+    )
+    return model, tokenizer
+
 
 def load_qwen(device="cuda"):
     print("\n[Loading Qwen model...]")

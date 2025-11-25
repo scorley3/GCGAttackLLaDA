@@ -1,0 +1,9 @@
+[
+  {
+    "iterations": 128,
+    "top_k": 32,
+    "batch_size": 32,
+    "suffix_length": 15,
+    "mc_num": 64
+  }
+]

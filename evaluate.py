@@ -8,6 +8,18 @@ import gc
 from models import load_qwen, load_llada, unload_model
 import matplotlib.pyplot as plt
 
+def start_log(log_path, iters, k, batch_size, suffix_len, mc_num):
+    log_data = [{
+        "iterations": iters,
+        "top_k": k,
+        "batch_size": batch_size,
+        "suffix_length": suffix_len,
+        "mc_num": mc_num,
+    }]
+    with open(log_path, "w") as f:
+        json.dump(log_data, f, indent=2) 
+
+
 def update_log_entry(prompt_id, update_dict, log_path="attack_log.json", plot_path="plot"):
 
     try:
@@ -33,12 +45,14 @@ def update_log_entry(prompt_id, update_dict, log_path="attack_log.json", plot_pa
     with open(log_path, "w") as f:
         json.dump(data, f, indent=2)
 
-def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string, mc_num=64):
+def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string, change_prefix, mc_num=64):
     gc.collect()
     torch.cuda.empty_cache()
     total = len(prompts)
     successful = 0
     adversarial_strings = [] 
+
+    start_log(log_path, iters, k, batch_size, suffix_len, mc_num)
     # QWEN ATTACK PATH
     if use_qwen == True:
         qwen_model, qwen_tokenizer = load_qwen(device=device)
@@ -140,11 +154,12 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
             if seed_llada == "True":
                 print(f"\n=== Using Seed: {adversarial_strings[i]} ===")
             if (seed_llada == "True"):
-                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, seed=adversarial_strings[i], mc_num=mc_num)
+                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, change_prefix=change_prefix, seed=adversarial_strings[i], mc_num=mc_num)
             else:
-                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, mc_num=mc_num)
+                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, mc_num=mc_num, change_prefix=change_prefix )
             
             save_loss_plot(loss_vals, f"{plot_path}{i}.png")
+            
             
             print("OPTIMIZED PROMPT:", optimized_prompt)
             for attempt in range(5):
@@ -152,7 +167,7 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
                 llada_output = llada_generate(optimized_prompt, llada_model, llada_tokenizer, device=device)
                 print("LLADA OUTPUT:", llada_output)
                 if prefill_string:
-                    temp = optimized_prompt + "Sure, heres how to " + prompt
+                    temp = optimized_prompt + "Sure, heres how to " #+ prompt
                     llada_output_prefill = llada_generate(temp, llada_model, llada_tokenizer, device=device)
                     print("LLADA OUTPUT WITH PREFILL:", llada_output_prefill)
             
@@ -167,6 +182,7 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
                         "optimized_prompt_llada": optimized_prompt,
                         "llada_output": llada_output,
                         "llada_output_prefill": llada_output_prefill if prefill_string is not None else "N/A",
+                        "loss_values": loss_vals,
                     },
                     log_path=log_path
                 )
@@ -181,6 +197,7 @@ def save_loss_plot(loss_vals, plot_path):
     plt.ylabel('Loss')
     plt.title('Loss over GCG Iterations')
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+    
 
 def llada_generate(optimized_prompt, llada_model, llada_tokenizer, device="cuda"):
     m = [{"role": "user", "content": optimized_prompt}, ]

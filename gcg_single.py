@@ -7,7 +7,7 @@ import gc
 
 
 
-def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_num, seed="None"):
+def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_num, change_prefix, seed="None"):
   model.eval()
   device = model.device
   embeddings = model.model.transformer.wte
@@ -15,6 +15,9 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_
   target_ids = tokenizer(target, return_tensors="pt")["input_ids"].to(device)
   prefix_len = prefix_ids.shape[1]
   loss_vals = []
+  prev_loss = 1e9
+  if change_prefix:
+    suffix_len = suffix_len + prefix_len
   if seed != "None":
     suffix_tokens = tokenizer(seed, return_tensors="pt")["input_ids"].to(device)
   #randomly seed suffix
@@ -31,9 +34,13 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_
 
     model_output = model(inputs_embeds=input_embeddings)
 
+    # RUBEN ALERT -- loss (idk if this is right but it seems like this is only getting the loss for the suffix tokens)
     output_logits = model_output.logits
-    model_pred_slice = output_logits[:, prefix_len - 1 : prefix_len - 1 + target_ids.shape[1], :] # from last token of prompt to the size of target
-
+    if not change_prefix:
+      model_pred_slice = output_logits[:, prefix_len - 1 : prefix_len - 1 + target_ids.shape[1], :] # from last token of prompt to the size of target
+    else:
+      model_pred_slice = output_logits[:, 0 : target_ids.shape[1], :]
+  
     # compute per-token loss, ignoring padded positions
     original_loss = F.cross_entropy(
             model_pred_slice.reshape(-1, model_pred_slice.size(-1)), #reshape to size (flatten(batch x seq_len), vocab size)
@@ -63,22 +70,30 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_
 
     candidates = torch.zeros([B, len(input_ids[0])], dtype=torch.long, device=device)
     losses = torch.zeros(B,device=device)
-
     for b in range(B):
       temp = input_ids.clone()[0]
 
+      # RUBEN ALERT -- selecting which token to modify 
       # Select random element from I
-      i = prefix_len + torch.randint(suffix_len, (1,)).item()
+      if not change_prefix:
+        i = prefix_len + torch.randint(suffix_len, (1,)).item()
+      else:
+        i = torch.randint(suffix_len, (1,)).item()
 
       # Select random element from Xi
-      token_idx = Xi_indices[i - prefix_len][torch.randint(k, (1,)).item()]
+      if change_prefix:
+        token_idx = Xi_indices[i][torch.randint(k, (1,)).item()]
+      else:
+        token_idx = Xi_indices[i - prefix_len][torch.randint(k, (1,)).item()]
       temp[i] = token_idx
       candidates[b] = temp
       with torch.no_grad():
         losses[b] = -1 * get_log_likelihood.get_log_likelihood(model, candidates[b], target_ids.squeeze(0), mc_num=mc_num, batch_size=16, cfg_scale=0., mask_id=126336)
-    loss_vals.append(torch.min(losses))
-    x_ids = candidates[torch.argmin(losses)]
-    suffix_tokens = x_ids[prefix_len:].unsqueeze(0)
+    if torch.min(losses).item() < prev_loss:
+      prev_loss = torch.min(losses).item()
+      loss_vals.append(torch.min(losses))
+      x_ids = candidates[torch.argmin(losses)]
+      suffix_tokens = x_ids[prefix_len:].unsqueeze(0)
     # retrieve token
     del input_ids, input_embeddings, grads, candidates, losses, Xi_indices, Xi_vals
     torch.cuda.empty_cache()  
