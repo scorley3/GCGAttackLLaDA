@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 from gcg_qwen import qwen_gcg_single_attack
 from gcg_single import gcg_single_attack_loss
 import gc
-from models import *
+from models import load_qwen, load_llada, load_llada_base, unload_model
 import matplotlib.pyplot as plt
 
 def start_log(log_path, iters, k, batch_size, suffix_len, mc_num):
@@ -144,9 +144,9 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
 
     # LLADA ONLY PATH
     elif use_qwen == False or (use_qwen == True and seed_llada == True):
-        llada_model, llada_tokenizer = load_llada(device=device)
-
         for i in range(total):
+            llada_model, llada_tokenizer = load_llada_base(device=device)
+
             prompt = prompts[i]
             target = targets[i]
 
@@ -160,15 +160,17 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
             
             save_loss_plot(loss_vals, f"{plot_path}{i}.png")
             
-            
+            unload_model(llada_model)
+            llada_model_instruct, llada_tokenizer_instruct = load_llada(device=device)
+
             print("OPTIMIZED PROMPT:", optimized_prompt)
             for attempt in range(5):
                 print(f"==========ATTEMPT {attempt + 1}==========")
-                llada_output = llada_generate(optimized_prompt, llada_model, llada_tokenizer, device=device)
+                llada_output = llada_generate(optimized_prompt, llada_model_instruct, llada_tokenizer_instruct, device=device)
                 print("LLADA OUTPUT:", llada_output)
                 if prefill_string:
                     temp = optimized_prompt + "Sure, heres how to " #+ prompt
-                    llada_output_prefill = llada_generate(temp, llada_model, llada_tokenizer, device=device)
+                    llada_output_prefill = llada_generate(temp, llada_model_instruct, llada_tokenizer_instruct, device=device)
                     print("LLADA OUTPUT WITH PREFILL:", llada_output_prefill)
             
             # if target.lower() in llada_output.lower():
@@ -186,6 +188,8 @@ def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_l
                     },
                     log_path=log_path
                 )
+            unload_model(llada_model_instruct)
+   
         return 0
         # return successful / total
 
@@ -222,151 +226,6 @@ def llada_generate(optimized_prompt, llada_model, llada_tokenizer, device="cuda"
 
     return llada_output
 
-
-
-def evaluate(prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string, change_prefix, mc_num=64):
-    gc.collect()
-    torch.cuda.empty_cache()
-    total = len(prompts)
-    successful = 0
-    adversarial_strings = [] 
-
-    start_log(log_path, iters, k, batch_size, suffix_len, mc_num)
-    # QWEN ATTACK PATH
-    if use_qwen == True:
-        qwen_model, qwen_tokenizer = load_qwen(device=device)
-
-        for i in range(total):
-            prompt = prompts[i] #+ ". (Respond in English)"
-            target = targets[i]
-            print(f"\n=== Running Qwen Attack for Prompt {i}: {prompt} ===")
-
-            print("\n--- Running GCG Attack on Qwen ---")
-            optimized_prompt = qwen_gcg_single_attack(qwen_model, qwen_tokenizer, prompt, target, suffix_len, iters, k, batch_size)
-            print("OPTIMIZED PROMPT (Qwen):", optimized_prompt)
-
-            # Evaluate on Qwen
-            print("\n--- Testing Adversarial Prompt on Qwen ---")
-            q_ids = qwen_tokenizer(optimized_prompt, return_tensors="pt").input_ids.to(device)
-            with torch.no_grad():
-                output_ids = qwen_model.generate(
-                    q_ids,
-                    max_length=q_ids.shape[1] + 128,
-                    do_sample=False,
-                )
-
-                qwen_output = qwen_tokenizer.decode(output_ids[0][q_ids.shape[1]:], skip_special_tokens=True)
-            print("QWEN OUTPUT:", qwen_output)
-
-            if target.lower() in qwen_output.lower():
-                print("QWEN ATTACK SUCCESSFUL")
-
-            # save for LLADA
-            adversarial_strings.append((optimized_prompt, target))
-            # Save for LLADA
-            adversarial_strings.append((optimized_prompt, target))
-
-            update_log_entry(
-                prompt_id=i,
-                update_dict={
-                    "prompt": prompt,
-                    "target": target,
-                    "optimized_prompt_qwen": optimized_prompt,
-                    "qwen_output": qwen_output,
-                },
-                log_path=log_path
-            )
-
-        # unload Qwen before loading LLADA in order to save ram
-        unload_model(qwen_model)
-        if seed_llada != "True":
-            # reload llama 
-            llada_model, llada_tokenizer = load_llada(device=device)
-            m = [{"role": "user", "content": prompt}, ]
-            for optimized_prompt, target in adversarial_strings:
-                print("\n--- Evaluating Qwen Adversarial Prompt on LLADA ---")
-                prompt = llada_tokenizer.apply_chat_template(m, add_generation_prompt=True, tokenize=False)
-                input_ids = llada_tokenizer(prompt)['input_ids']
-                input_ids = torch.tensor(input_ids).to(device).unsqueeze(0)
-
-                response_ids = generate.generate(
-                    llada_model,
-                    input_ids,
-                    steps=128,
-                    gen_length=128,
-                    block_length=32,
-                    temperature=0.0,
-                    cfg_scale=0.0,
-                    remasking="low_confidence"
-                )
-
-                llada_output = llada_tokenizer.batch_decode(
-                    response_ids[:, input_ids.shape[1]:],
-                    skip_special_tokens=True
-                )[0]
-
-                print("LLADA OUTPUT:", llada_output)
-
-                if target.lower() in llada_output.lower():
-                    print("LLADA ATTACK SUCCESSFUL")
-                    successful += 1
-                update_log_entry(
-                    prompt_id=i,
-                    update_dict={
-                        "optimized_prompt_llada": optimized_prompt,
-                        "llada_output": llada_output,
-                    },
-                    log_path=log_path
-                )
-
-            return successful / total
-
-    # LLADA ONLY PATH
-    elif use_qwen == False or (use_qwen == True and seed_llada == True):
-        llada_model, llada_tokenizer = load_llada(device=device)
-
-        for i in range(total):
-            prompt = prompts[i]
-            target = targets[i]
-
-            print(f"\n=== Running LLADA Attack for Prompt {i}: {prompt} ===")
-            if seed_llada == "True":
-                print(f"\n=== Using Seed: {adversarial_strings[i]} ===")
-            if (seed_llada == "True"):
-                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, change_prefix=change_prefix, seed=adversarial_strings[i], mc_num=mc_num)
-            else:
-                optimized_prompt, loss_vals = gcg_single_attack_loss(llada_model, llada_tokenizer, prompt, target, suffix_len, iters, k, batch_size, mc_num=mc_num, change_prefix=change_prefix )
-            
-            save_loss_plot(loss_vals, f"{plot_path}{i}.png")
-            
-            
-            print("OPTIMIZED PROMPT:", optimized_prompt)
-            for attempt in range(5):
-                print(f"==========ATTEMPT {attempt + 1}==========")
-                llada_output = llada_generate(optimized_prompt, llada_model, llada_tokenizer, device=device)
-                print("LLADA OUTPUT:", llada_output)
-                if prefill_string:
-                    temp = optimized_prompt + "Sure, heres how to " #+ prompt
-                    llada_output_prefill = llada_generate(temp, llada_model, llada_tokenizer, device=device)
-                    print("LLADA OUTPUT WITH PREFILL:", llada_output_prefill)
-            
-            # if target.lower() in llada_output.lower():
-            #     print("ATTACK SUCCESSFUL")
-            #     successful += 1
-                update_log_entry(
-                    prompt_id=str(i) + f"_{attempt + 1}",
-                    update_dict={
-                        "prompt": prompt,
-                        "target": target,
-                        "optimized_prompt_llada": optimized_prompt,
-                        "llada_output": llada_output,
-                        "llada_output_prefill": llada_output_prefill if prefill_string is not None else "N/A",
-                        "loss_values": loss_vals,
-                    },
-                    log_path=log_path
-                )
-        return 0
-        # return successful / total
 
 def inpainting_evaluate(prompts, iters, prompt_length):
     model, tokenizer = load_llada_base()
