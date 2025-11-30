@@ -1,15 +1,17 @@
 import torch, gc
 import torch.nn.functional as F
-from evaluate import evaluate, inpainting_evaluate
+from evaluate import evaluate, inpainting_evaluate, evaluate_prefix_only  
 from data import get_dataset
 import argparse
 #prompts, targets, iters, k, batch_size, plot_path, use_qwen, seed_llada, device, suffix_len,log_path, prefill_string
-def main(prompts_start, prompts_end, iterations, k, batch_size,use_qwen, suffix_len, seed_llada, prefill_string, log_path, plot_path, mc_num, change_prefix, inpainting): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
+def main(prompts_start, prompts_end, iterations, k, batch_size,use_qwen, suffix_len, seed_llada, prefill_string, log_path, plot_path, mc_num, change_prefix, inpainting, attempts, only): #prompts, targets, iters, k, batch_size, use_qwen=True, device="cuda", suffix_len=30
     gc.collect()
     torch.cuda.empty_cache()
     prompts, targets = get_dataset()
-    if inpainting:
-        inpainting_evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, prompt_length=suffix_len)
+    if only: 
+        evaluate_prefix_only(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len, log_path=log_path, prefill_string=prefill_string, plot_path=plot_path, mc_num=mc_num, change_prefix=change_prefix)
+    elif inpainting:
+        inpainting_evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], attempts, iterations, prompt_length=suffix_len)
     else:
         evaluate(prompts[prompts_start:prompts_end], targets[prompts_start:prompts_end], iterations, k, batch_size=batch_size, use_qwen=use_qwen,seed_llada=seed_llada, device="cuda", suffix_len=suffix_len, log_path=log_path, prefill_string=prefill_string, plot_path=plot_path, mc_num=mc_num, change_prefix=change_prefix)
 
@@ -45,6 +47,8 @@ if __name__ == "__main__":
     parser.add_argument("--mc_num", type=int, default=64, help="Number of Monte Carlo samples for LLADA evaluation (gcg)")
     parser.add_argument("--change_prefix", type=str2bool, default=False, help="Update prefix as well as suffix (gcg)")
     parser.add_argument("--inpainting", type=str2bool, default=False, help="Run inpainting attack (inpainting)")
+    parser.add_argument("--attempts", type=int, default=50, help="Restarts for inpainting attack (inpainting)")
+    parser.add_argument("--only", type=str2bool, default=False, help="Only run with prompt")
     args = parser.parse_args()
     
     main(
@@ -61,5 +65,7 @@ if __name__ == "__main__":
         plot_path=args.plot_path,
         mc_num=args.mc_num,
         change_prefix=args.change_prefix,
-        inpainting=args.inpainting
+        inpainting=args.inpainting,
+        attempts=args.attempts,
+        only = args.only, 
     )

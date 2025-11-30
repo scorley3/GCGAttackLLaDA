@@ -21,26 +21,15 @@ def get_qwen_model():
 #     load_in_8bit=True,
 #     llm_int8_threshold=6.0  # optional, helps with stability
 # )
-def get_llada_model():
-    tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Instruct', trust_remote_code=True)
-
-    model = AutoModel.from_pretrained(
-        'GSAI-ML/LLaDA-8B-Instruct',
-        #quantization_config=bnb_config,
-        device_map="auto",
-        trust_remote_code=True
-    )
-
-    return tokenizer, model
 
 def load_llada_base(device="cuda"):
     print("\n[Loading LLADA Base model...]")
     tokenizer = AutoTokenizer.from_pretrained(
-        "GSAI-ML/LLaDA-8B",
+        "GSAI-ML/LLaDA-8B-Base",
         trust_remote_code=True
     )
     model = AutoModel.from_pretrained(
-        "GSAI-ML/LLaDA-8B",
+        "GSAI-ML/LLaDA-8B-Base",
         dtype="float16",
         device_map=device,
         trust_remote_code=True
