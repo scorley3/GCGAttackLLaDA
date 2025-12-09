@@ -103,8 +103,12 @@ def gcg_single_attack_loss(model, tokenizer, x, target, suffix_len, T, k, B, mc_
   final_ids = torch.cat([prefix_ids, suffix_tokens], dim=1)
   return tokenizer.decode(final_ids[0], skip_special_tokens=True), [l.cpu().item() for l in loss_vals]
 
+
+
+
+
 # USE THIS FUNCTION -- suffix len and change prefix and seed are unused but i left them so i wouldnt have to change function calls
-def gcg_single(model, tokenizer, x, target, suffix_len, T, k, B, mc_num, change_prefix, seed="None"):
+def gcg_single(model, tokenizer, x, target, T, k, B, mc_num):
   model.eval()
   device = model.device
   mask_id = 126336
@@ -247,6 +251,8 @@ def gcg_single(model, tokenizer, x, target, suffix_len, T, k, B, mc_num, change_
   # return final optimized prompt, loss values over iters, and list of the prompts at each iter -- allows testing of intermediate prompts to see if any of them worked
   return x, [l.cpu().item() for l in loss_vals], prompts
 
+
+
 # had to copy this function in from evaluate because of circular import 
 def llada_generate(optimized_prompt, llada_model, llada_tokenizer, device="cuda"):
     m = [{"role": "user", "content": optimized_prompt}, ]
@@ -270,3 +276,36 @@ def llada_generate(optimized_prompt, llada_model, llada_tokenizer, device="cuda"
     )[0]
 
     return llada_output
+
+
+
+import torch
+
+def mini_generate(model, tokenizer, user_prompt, max_new_tokens=200, temperature=0.0, top_p=1.0, device='cuda'):
+    model.to(device)
+    
+    # Build messages list for chat template
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    # Apply the chat template
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+    
+    # Tokenize and move to device
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    input_ids = inputs["input_ids"]
+    
+    # Generate text
+    output_ids = model.generate(
+        input_ids,
+        max_new_tokens=max_new_tokens,
+        do_sample=True,
+        temperature=temperature,
+        top_p=top_p
+    )
+    
+    output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    
+    return output_text

@@ -3,18 +3,13 @@ from transformers import BitsAndBytesConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 import gc
 
-def get_qwen_model():
-    model_name_qwen = "Qwen/Qwen2.5-3B-Instruct"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_qwen = AutoModelForCausalLM.from_pretrained(
-        model_name_qwen,
-        torch_dtype="auto",
-        device_map="auto"
-    )
-    model_qwen.to(device)
-    tokenizer = AutoTokenizer.from_pretrained(model_name_qwen)
 
-    return tokenizer, model_qwen
+
+def load_llada_mini(device="cuda"):
+    print("\n[Loading LLADA Mini model...]")
+    tokenizer = AutoTokenizer.from_pretrained("inclusionAI/LLaDA2.0-mini-preview", trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained("inclusionAI/LLaDA2.0-mini-preview", trust_remote_code=True, dtype="float16")
+    return model, tokenizer
 
 # Quantization config for 8-bit to use with not A100
 # bnb_config = BitsAndBytesConfig(
@@ -28,20 +23,22 @@ def load_llada_base(device="cuda"):
         "GSAI-ML/LLaDA-8B-Base",
         trust_remote_code=True
     )
+    print("[LLADA Base] Tokenizer loaded.")
     model = AutoModel.from_pretrained(
         "GSAI-ML/LLaDA-8B-Base",
         dtype="float16",
         device_map=device,
         trust_remote_code=True
     )
+    print("[LLADA Base] Model loaded onto device.")
     return model, tokenizer
 
 
 def load_qwen(device="cuda"):
     print("\n[Loading Qwen model...]")
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct")
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B")
     model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-3B-Instruct",
+        "Qwen/Qwen2.5-3B",
         dtype="float16",
         device_map=device,
     )
